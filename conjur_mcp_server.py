@@ -25,7 +25,6 @@ TOOLS = [
                 "description": "The full path of the secret (e.g., 'data/my-secret')"
             }
         },
-        # "required": ["secret_id"]
     },
     {
         "tool": "set_secret_value",
@@ -68,15 +67,14 @@ async def mcp_handler(req: Request, body: MCPRequest):
     instruction = (
         "You are a tool selector for Conjur Cloud.\n"
         "Your job is to extract the correct tool to use and return a JSON like:\n"
-
         "{\"tool\": \"tool_name\", \"url\": \"request_uri\", \"method_type\": \"method_type\", \"request_body\": \"body\"}\n"
         f"Valid tools are: {TOOLS}.\n"
         "ONLY return the JSON object. Do not include any explanations or extra text.\n"
         "If the user request does not exactly suit any tool - return an empty string in the tool name.\n"
         "Please provide these details in the JSON:\n"
         "- tool: The name of the tool to use (e.g., 'get_secret_value')\n"
-        "- request_body: The body of the request if applicable (e.g., for set_secret_value)\n"  # Fixed: was "body"
-        "- method_type: The HTTP method to use (e.g., 'GET', 'POST')\n"  # Fixed: was "method_name"
+        "- request_body: The body of the request if applicable (e.g., for set_secret_value)\n" 
+        "- method_type: The HTTP method to use (e.g., 'GET', 'POST')\n" 
         "- url: The URL to call for the tool\n"
 
         "The user request is: '" + prompt + "'"
@@ -113,8 +111,6 @@ async def mcp_handler(req: Request, body: MCPRequest):
         tool_name = parsed["tool"]
         if tool_name == '':
             return 'No matching tool'
-
-        # args = parsed["arguments"]
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to parse model output: {text_output}")
 
