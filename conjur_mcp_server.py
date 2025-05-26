@@ -1,12 +1,15 @@
 import json
 from fastapi import FastAPI, Request, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, HttpUrl
+from typing import Dict
+
 import boto3
 
 app = FastAPI()
 
 # Use Claude 3.5 Sonnet
 BEDROCK_MODEL_ID = "anthropic.claude-3-7-sonnet-20250219-v1:0"
+CONJUR_CLOUD_URL = 'alonbtest.secretsmgr.cyberark-everest-integdev.cloud'
 
 # Bedrock client
 bedrock = boto3.client("bedrock-runtime", region_name="us-east-1")
@@ -38,6 +41,17 @@ TOOLS = [
             }
         },
         "required": ["secret_id", "secret_value"]
+    },
+    {
+        "name": "generate_policy",
+        "description": "Craft a Conjur Cloud policy in a YAML format.",
+        "arguments": {
+            "policy": {
+                "type": "string",
+                "description": "The policy in YAML format"
+            }
+        },
+        "required": ["policy"]
     }
 ]
 
@@ -60,10 +74,8 @@ async def mcp_handler(req: Request, body: MCPRequest):
         f"Valid tools are: {TOOLS}.\n"
         "ONLY return the JSON object. Do not include any explanations or extra text.\n"
         "if the user request does not exactly suit to any tool - return an empty string in the tool name.\n"
-        "The only exception is if the user asks to create a conjur cloud policy - in that case return a yaml text of the requested policy.\n"
         "The user request is: '" + prompt + "'"
     )
-
 
     payload = {
         "anthropic_version": "bedrock-2023-05-31",
@@ -97,17 +109,29 @@ async def mcp_handler(req: Request, body: MCPRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to parse model output: {text_output}")
 
-    # Execute correct tool
+    data = RequestData(
+        args = args,
+        tool_name='',
+        url="https://api.example.com/data",
+    )
+
     if tool_name == "get_secret_value":
-        return {"result": get_secret_from_conjur(args["secret_id"], token)}
+        data.url = f'https://{CONJUR_CLOUD_URL}/api/secrets/conjur/variable/{args["secret_id"]}' # TODO url encode
+        data.tool_name = 'Get Secret'
     elif tool_name == "set_secret_value":
-        return {"result": set_secret_value(args["secret_id"], args["secret_value"], token)}
+        data.url = f'https://{CONJUR_CLOUD_URL}/api/secrets/conjur/variable/{args["secret_id"]}' # TODO url encode
+        data.tool_name = 'Set Secret'
+    elif tool_name == "generate_policy":
+        data.url = f'https://{CONJUR_CLOUD_URL}/api/policies/conjur/policy/data'
+        data.tool_name = 'Load Policy'
     else:
         raise HTTPException(status_code=400, detail="No matching tool found.")
+    
+    return data
+    
 
-# Mock Conjur logic
-def get_secret_from_conjur(secret_id: str, token: str):
-    return f"The value of the secret '{secret_id}' is: [MOCKED_SECRET_VALUE]"
 
-def set_secret_value(secret_id: str, value: str, token: str):
-    return f"Successfully set value '{value}' for secret '{secret_id}'"
+class RequestData(BaseModel):
+    url: HttpUrl
+    tool_name: str
+    args: Dict[str, str]
