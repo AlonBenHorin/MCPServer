@@ -24,6 +24,11 @@ TOOLS = [
         "tool": "load_policy",
         "description": "Loads a policy in conjur cloud.",
 
+    },
+    {
+        "tool": "show_resource",
+        "description": "The response to this method is a JSON document describing a single resource. branch should be only <resource_kind>/<resource_id> (without /resources)",
+
     }
 ]
 
@@ -31,7 +36,7 @@ class MCPRequest(BaseModel):
     prompt: str
 
 @app.post("/ai/mcp")
-async def mcp_handler(req: Request, body: MCPRequest):
+async def mcp_handler(body: MCPRequest):
     prompt = body.prompt.strip()
 
     # Create instruction prompt
