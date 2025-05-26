@@ -71,27 +71,30 @@ async def mcp_handler(body: MCPRequest):
     }
 
     response = bedrock.invoke_model(
-        modelId="arn:aws:bedrock:us-east-1:238637036211:inference-profile/us.anthropic.claude-3-7-sonnet-20250219-v1:0",
+        modelId="arn:aws:bedrock:us-east-1:238637036211:inference-profile/us.anthropic.claude-sonnet-4-20250514-v1:0",
         body=json.dumps(payload),
         contentType="application/json",
         accept="application/json"
     )
     print(f"Response from Bedrock: {response}")
 
-    result = json.loads(response["body"].read())
-    print(f"Response.body from Bedrock: {result}")
+    raw_body = response["body"].read()
+    parsed_response = json.loads(raw_body)
 
-    text_output = result["content"][0]["text"]
+    # Extract the model text output
+    model_message = parsed_response["content"][0]["text"]
+
+    # Remove Markdown block (```json ... ```)
+    if model_message.startswith("```json"):
+        model_message = model_message.strip("```json").strip("```").strip()
 
     try:
-        start = text_output.index("{")
-        json_part = text_output[start:]
-        parsed = json.loads(json_part)
+        parsed = json.loads(model_message)
         tool_name = parsed["tool"]
         if tool_name == '':
             return 'No matching tool'
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to parse model output: {text_output}")
+        raise HTTPException(status_code=500, detail=f"Failed to parse model output: {e}")
 
     data = RequestData(
         body = parsed["request_body"],
