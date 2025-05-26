@@ -6,7 +6,7 @@ import boto3
 app = FastAPI()
 
 # Use Claude 3.5 Sonnet
-BEDROCK_MODEL_ID = "anthropic.claude-instant-v1"
+BEDROCK_MODEL_ID = "anthropic.claude-3-7-sonnet-20250219-v1:0"
 
 # Bedrock client
 bedrock = boto3.client("bedrock-runtime", region_name="us-east-1")
@@ -53,7 +53,6 @@ async def mcp_handler(req: Request, body: MCPRequest):
     prompt = body.prompt.strip()
 
     # Create instruction prompt
-    tool_names = ", ".join(tool["name"] for tool in TOOLS)
     instruction = (
         "You are a tool selector for Conjur Cloud.\n"
         "Your job is to extract the correct tool to use and return a JSON like:\n"
@@ -65,21 +64,20 @@ async def mcp_handler(req: Request, body: MCPRequest):
         "The user request is: '" + prompt + "'"
     )
 
+
     payload = {
         "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 512,
-        "temperature": 0.5,
         "messages": [
             {
                 "role": "user",
-                "content": [{"type": "text", "text": instruction}],
+                "content": instruction
             }
         ],
+        "max_tokens": 512  # REQUIRED
     }
 
-
     response = bedrock.invoke_model(
-        modelId=BEDROCK_MODEL_ID,
+        modelId="arn:aws:bedrock:us-east-1:238637036211:inference-profile/us.anthropic.claude-3-7-sonnet-20250219-v1:0",
         body=json.dumps(payload),
         contentType="application/json",
         accept="application/json"
@@ -93,6 +91,8 @@ async def mcp_handler(req: Request, body: MCPRequest):
         json_part = text_output[start:]
         parsed = json.loads(json_part)
         tool_name = parsed["tool"]
+        if tool_name == '':
+            return 'No matching tool'
         args = parsed["arguments"]
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to parse model output: {text_output}")
