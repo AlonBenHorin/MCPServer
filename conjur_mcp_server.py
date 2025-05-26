@@ -8,10 +8,6 @@ import json
 
 app = FastAPI()
 
-# Use Claude 3.5 Sonnet
-BEDROCK_MODEL_ID = "anthropic.claude-3-7-sonnet-20250219-v1:0"
-CONJUR_CLOUD_URL = 'https://alonbtest.secretsmgr.cyberark-everest-integdev.cloud'
-
 # Bedrock client
 bedrock = boto3.client("bedrock-runtime", region_name="us-east-1")
 
@@ -19,40 +15,15 @@ TOOLS = [
     {
         "tool": "get_secret_value",
         "description": "Retrieves the value of a secret from Conjur Cloud.",
-        "arguments": {
-            "secret_id": {
-                "type": "string",
-                "description": "The full path of the secret (e.g., 'data/my-secret')"
-            }
-        },
     },
     {
         "tool": "set_secret_value",
         "description": "Sets the value of a secret in Conjur Cloud.",
-        "arguments": {
-            "secret_id": {
-                "type": "string",
-                "description": "The full path of the secret (e.g., 'data/my-secret')"
-            },
-            "secret_value": {
-                "type": "string",
-                "description": "The value of the secret"
-            }
-        },
     },
     {
         "tool": "load_policy",
         "description": "Loads a policy in conjur cloud.",
-        "arguments": {
-            "body": {
-                "type": "string",
-                "description": "Policy body in YAML format"
-            },
-            "url": {
-                "type": "string",
-                "description": "The branch to load the policy to (e.g., 'data/my-branch')"
-            }
-        },
+
     }
 ]
 
@@ -64,20 +35,23 @@ async def mcp_handler(req: Request, body: MCPRequest):
     prompt = body.prompt.strip()
 
     # Create instruction prompt
-    instruction = (
-        "You are a tool selector for Conjur Cloud.\n"
-        "Your job is to extract the correct tool to use and return a JSON like:\n"
-        "{\"tool\": \"tool_name\", \"url\": \"request_uri\", \"method_type\": \"method_type\", \"request_body\": \"body\"}\n"
-        f"Valid tools are: {TOOLS}.\n"
-        "ONLY return the JSON object. Do not include any explanations or extra text.\n"
-        "If the user request does not exactly suit any tool - return an empty string in the tool name.\n"
-        "Please provide these details in the JSON:\n"
-        "- tool: The name of the tool to use (e.g., 'get_secret_value')\n"
-        "- request_body: The body of the request if applicable (e.g., for set_secret_value)\n" 
-        "- method_type: The HTTP method to use (e.g., 'GET', 'POST')\n" 
-        "- url: The URL to call for the tool\n"
-
-        "The user request is: '" + prompt + "'"
+    instruction = (f"""You are a tool selector for Conjur Cloud.
+        Your job is to analyze the user request and select the appropriate tool, then return a JSON response.
+        Available tools:{TOOLS}
+        
+        Instructions:
+        1. Analyze the user request and determine which tool best matches their intent
+        2. Return ONLY a JSON object with these fields:
+           - "tool": The name of the tool to use (or empty string if no match)
+           - "url": The request URI/endpoint to call
+           - "method_type": The HTTP method ("GET", "POST", "PUT", "DELETE")
+           - "request_body": The body content (empty string if not applicable)
+        
+        3. If the user request doesn't match any available tool, set "tool" to an empty string
+        4. Do not include explanations or extra text - only return the JSON object
+        
+        User request: "{prompt}"
+        """
     )
 
     payload = {
