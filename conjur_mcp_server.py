@@ -14,7 +14,7 @@ bedrock = boto3.client("bedrock-runtime", region_name="us-east-1")
 TOOLS = [
     {
         "tool": "get_secret_value",
-        "description": "Retrieves the value of a secret from Conjur Cloud.",
+        "description": "Retrieves the value of a secret from Conjur Cloud",
     },
     {
         "tool": "set_secret_value",
@@ -27,7 +27,7 @@ TOOLS = [
     },
     {
         "tool": "show_resource",
-        "description": "The response to this method is a JSON document describing a single resource. branch should be only <resource_kind>/<resource_id> (without /resources)",
+        "description": "The response to this method is a JSON document describing a single resource. The endpoint for show_resource is: {kind}/{identifier}",
 
     }
 ]
@@ -48,13 +48,13 @@ async def mcp_handler(body: MCPRequest):
         1. Analyze the user request and determine which tool best matches their intent
         2. Return ONLY a JSON object with these fields:
            - "tool": The name of the tool to use (or empty string if no match)
-           - "url": The request URI/endpoint to call
+           - "branch": The relative uri resource path, e.g., "data/lev"
            - "method_type": The HTTP method ("GET", "POST", "PUT", "DELETE")
            - "request_body": The body content (empty string if not applicable)
         
         3. If the user request doesn't match any available tool, set "tool" to an empty string
         4. Do not include explanations or extra text - only return the JSON object
-        
+        5. Try to guess the resource kind from the user request, if not specified in the request, assume it is a variable
         User request: "{prompt}"
         """
     )
@@ -97,7 +97,7 @@ async def mcp_handler(body: MCPRequest):
         body = parsed["request_body"],
         method_name= parsed["method_type"],
         tool_name=parsed["tool"],
-        branch=parsed["url"],
+        branch=parsed["branch"],
     )
     print(data)
     return data
