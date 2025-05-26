@@ -1,6 +1,8 @@
 import json
 from fastapi import FastAPI, Request, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, HttpUrl
+from typing import Dict
+
 import boto3
 import json
 
@@ -8,14 +10,14 @@ app = FastAPI()
 
 # Use Claude 3.5 Sonnet
 BEDROCK_MODEL_ID = "anthropic.claude-3-7-sonnet-20250219-v1:0"
+CONJUR_CLOUD_URL = 'https://alonbtest.secretsmgr.cyberark-everest-integdev.cloud'
 
 # Bedrock client
 bedrock = boto3.client("bedrock-runtime", region_name="us-east-1")
 
-# Tools schema (informational only for prompt, not passed to model)
 TOOLS = [
     {
-        "name": "get_secret_value",
+        "tool": "get_secret_value",
         "description": "Retrieves the value of a secret from Conjur Cloud.",
         "arguments": {
             "secret_id": {
@@ -23,10 +25,10 @@ TOOLS = [
                 "description": "The full path of the secret (e.g., 'data/my-secret')"
             }
         },
-        "required": ["secret_id"]
+        # "required": ["secret_id"]
     },
     {
-        "name": "set_secret_value",
+        "tool": "set_secret_value",
         "description": "Sets the value of a secret in Conjur Cloud.",
         "arguments": {
             "secret_id": {
@@ -38,48 +40,47 @@ TOOLS = [
                 "description": "The value of the secret"
             }
         },
-        "required": ["secret_id", "secret_value"]
     },
     {
-        "name": "load_policy",
+        "tool": "load_policy",
         "description": "Loads a policy in conjur cloud.",
         "arguments": {
-            "policy_body": {
+            "body": {
                 "type": "string",
                 "description": "Policy body in YAML format"
             },
-            "policy_branch": {
+            "url": {
                 "type": "string",
                 "description": "The branch to load the policy to (e.g., 'data/my-branch')"
             }
         },
-        "required": ["policy_body", "policy_branch"]
     }
 ]
 
 class MCPRequest(BaseModel):
     prompt: str
 
-@app.post("/mcp")
+@app.post("/ai/mcp")
 async def mcp_handler(req: Request, body: MCPRequest):
-    token = req.cookies.get("access_token")
-    if not token:
-        raise HTTPException(status_code=401, detail="Missing access token")
-
     prompt = body.prompt.strip()
 
     # Create instruction prompt
     instruction = (
         "You are a tool selector for Conjur Cloud.\n"
         "Your job is to extract the correct tool to use and return a JSON like:\n"
-        "{\"tool\": \"tool_name\", \"arguments\": { ... } }\n"
+
+        "{\"tool\": \"tool_name\", \"url\": \"request_uri\", \"method_type\": \"method_type\", \"request_body\": \"body\"}\n"
         f"Valid tools are: {TOOLS}.\n"
         "ONLY return the JSON object. Do not include any explanations or extra text.\n"
-        "if the user request does not exactly suit to any tool - return an empty string in the tool name.\n"
-        "The only exception is if the user asks to create a conjur cloud policy - in that case return a yaml text of the requested policy.\n"
+        "If the user request does not exactly suit any tool - return an empty string in the tool name.\n"
+        "Please provide these details in the JSON:\n"
+        "- tool: The name of the tool to use (e.g., 'get_secret_value')\n"
+        "- request_body: The body of the request if applicable (e.g., for set_secret_value)\n"  # Fixed: was "body"
+        "- method_type: The HTTP method to use (e.g., 'GET', 'POST')\n"  # Fixed: was "method_name"
+        "- url: The URL to call for the tool\n"
+
         "The user request is: '" + prompt + "'"
     )
-
 
     payload = {
         "anthropic_version": "bedrock-2023-05-31",
@@ -112,26 +113,23 @@ async def mcp_handler(req: Request, body: MCPRequest):
         tool_name = parsed["tool"]
         if tool_name == '':
             return 'No matching tool'
-        args = parsed["arguments"]
+
+        # args = parsed["arguments"]
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to parse model output: {text_output}")
 
-    # Execute correct tool
-    if tool_name == "get_secret_value":
-        return {"result": get_secret_from_conjur(args["secret_id"], token)}
-    elif tool_name == "set_secret_value":
-        return {"result": set_secret_value(args["secret_id"], args["secret_value"], token)}
-    elif tool_name == "load_policy":
-        return {"result": load_policy(args["policy_branch"], args["policy_body"], token)}
-    else:
-        raise HTTPException(status_code=400, detail="No matching tool found.")
+    data = RequestData(
+        body = parsed["request_body"],
+        method_name= parsed["method_type"],
+        tool_name=parsed["tool"],
+        branch=parsed["url"],
+    )
+    print(data)
+    return data
 
-# Mock Conjur logic
-def get_secret_from_conjur(secret_id: str, token: str):
-    return f"The value of the secret '{secret_id}' is: [MOCKED_SECRET_VALUE]"
 
-def set_secret_value(secret_id: str, value: str, token: str):
-    return f"Successfully set value '{value}' for secret '{secret_id}'"
-
-def load_policy(policy_branch: str, value: str, token: str):
-    return f"Successfully load policy '{policy_branch}'. \n Policy body:\n {value}'"
+class RequestData(BaseModel):
+    branch: str
+    tool_name: str
+    body: str
+    method_name: str
