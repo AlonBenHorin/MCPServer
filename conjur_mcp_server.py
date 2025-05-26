@@ -2,6 +2,7 @@ import json
 from fastapi import FastAPI, Request, HTTPException
 from pydantic import BaseModel
 import boto3
+import json
 
 app = FastAPI()
 
@@ -38,6 +39,21 @@ TOOLS = [
             }
         },
         "required": ["secret_id", "secret_value"]
+    },
+    {
+        "name": "load_policy",
+        "description": "Loads a policy in conjur cloud.",
+        "arguments": {
+            "policy_body": {
+                "type": "string",
+                "description": "Policy body in YAML format"
+            },
+            "policy_branch": {
+                "type": "string",
+                "description": "The branch to load the policy to (e.g., 'data/my-branch')"
+            }
+        },
+        "required": ["policy_body", "policy_branch"]
     }
 ]
 
@@ -82,8 +98,11 @@ async def mcp_handler(req: Request, body: MCPRequest):
         contentType="application/json",
         accept="application/json"
     )
+    print(f"Response from Bedrock: {response}")
 
     result = json.loads(response["body"].read())
+    print(f"Response.body from Bedrock: {result}")
+
     text_output = result["content"][0]["text"]
 
     try:
@@ -102,6 +121,8 @@ async def mcp_handler(req: Request, body: MCPRequest):
         return {"result": get_secret_from_conjur(args["secret_id"], token)}
     elif tool_name == "set_secret_value":
         return {"result": set_secret_value(args["secret_id"], args["secret_value"], token)}
+    elif tool_name == "load_policy":
+        return {"result": load_policy(args["policy_branch"], args["policy_body"], token)}
     else:
         raise HTTPException(status_code=400, detail="No matching tool found.")
 
@@ -111,3 +132,6 @@ def get_secret_from_conjur(secret_id: str, token: str):
 
 def set_secret_value(secret_id: str, value: str, token: str):
     return f"Successfully set value '{value}' for secret '{secret_id}'"
+
+def load_policy(policy_branch: str, value: str, token: str):
+    return f"Successfully load policy '{policy_branch}'. \n Policy body:\n {value}'"
