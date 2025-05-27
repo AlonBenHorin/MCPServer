@@ -27,7 +27,7 @@ TOOLS = [
     },
     {
         "tool": "show_resource",
-        "description": "The response to this method is a JSON document describing a single resource. The endpoint for show_resource is: {kind}/{identifier}",
+        "description": "The response to this method is a JSON document describing a single resource. The branch for show_resource should be in the format of: {kind}/{identifier}, for example variable/myVar",
 
     }
 ]
@@ -48,7 +48,7 @@ async def mcp_handler(body: MCPRequest):
         1. Analyze the user request and determine which tool best matches their intent
         2. Return ONLY a JSON object with these fields:
            - "tool": The name of the tool to use (or empty string if no match)
-           - "branch": The relative uri resource path, e.g., "data/lev"
+           - "branch": The relative uri resource path, e.g., "data/lev" or "variable/mySecret"
            - "method_type": The HTTP method ("GET", "POST", "PUT", "DELETE")
            - "request_body": The body content (empty string if not applicable)
         
