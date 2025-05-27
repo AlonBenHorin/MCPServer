@@ -27,7 +27,7 @@ TOOLS = [
     },
     {
         "tool": "show_resource",
-        "description": "The response to this method is a JSON document describing a single resource. The branch for show_resource should be in the format of: {kind}/{identifier}, for example variable/myVar",
+        "description": "Describes the privilidges over the selected resource. The branch for show_resource should be in the format of: variable/{identifier}, for example variable/data/myVar",
 
     }
 ]
